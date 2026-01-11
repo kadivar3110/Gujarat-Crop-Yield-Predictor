@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pydantic
+pandas
+requests
+joblib
+scikit-learn==1.6.1
+numpy
+streamlit
+folium
+streamlit-folium
