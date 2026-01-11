@@ -9,7 +9,7 @@ This is a simple web app to predict crop yield for Gujarat districts using weath
 """)
 
 # API base URL (adjust if running elsewhere)
-API_URL = "http://localhost:8001"
+API_URL = "http://13.60.224.58:8000"
 
 # Get districts from API
 @st.cache_data
