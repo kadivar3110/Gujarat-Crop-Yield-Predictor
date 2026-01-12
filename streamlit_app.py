@@ -83,7 +83,7 @@ if st.button("Predict"):
 
 if st.session_state.get('prediction_result'):
     result = st.session_state['prediction_result']
-    
+
     st.success(f"Predicted Yield: {result['prediction']} {result['unit']}")
     st.write("Weather Data:")
     st.json(result["weather_data"])
@@ -92,7 +92,7 @@ elif st.session_state.get('prediction_error'):
     st.error(st.session_state['prediction_error'])
 
 
-
+## AI
 # --- Map Visualization Imports ---
 import json
 import folium
@@ -124,7 +124,7 @@ if 'show_map' not in st.session_state:
 
 # Use the crop selected above for both prediction and map
 selected_map_crop = selected_crop
-default_area = 100.0
+default_area = area
 
 
 if st.button("Show Gujarat Map for Selected Crop"):
