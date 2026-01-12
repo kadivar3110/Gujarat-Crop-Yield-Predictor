@@ -13,15 +13,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Load the model package
 try:
     package = joblib.load("crop_yield.joblib")
 except FileNotFoundError:
     package = None
     print("Warning: crop_yield.joblib not found. Model predictions will not work.")
 
-
-# T(base) values for different crop types
 CROP_TBASE = {
     "TOTAL COTTON (LINT)": 15.5,
     "TOTAL GROUNDNUT": 10,
@@ -32,7 +29,6 @@ CROP_TBASE = {
 }
 
 
-# Enum for valid crop types - user can ONLY select from these 6 crops
 class CropType(str, Enum):
     COTTON = "TOTAL COTTON (LINT)"
     GROUNDNUT = "TOTAL GROUNDNUT"
@@ -42,8 +38,7 @@ class CropType(str, Enum):
     TOBACCO = "TOTAL TOBACCO"
 
 
-# District-Crop mapping: Which crops are grown in which districts
-# Add districts where each crop is cultivated
+
 DISTRICT_CROPS = {
     "Ahmedabad": ["TOTAL COTTON (LINT)", "TOTAL GROUNDNUT", "TOTAL BAJRA", "CASTOR", "TOTAL RICE"],
     "Amreli": ["TOTAL COTTON (LINT)", "TOTAL GROUNDNUT", "TOTAL BAJRA", "CASTOR"],
@@ -81,17 +76,16 @@ DISTRICT_CROPS = {
 }
 
 
+
 def get_tbase(crop_type: str) -> Optional[float]:
-    """Get base temperature for a crop type."""
+
     crop_upper = crop_type.upper().strip()
     return CROP_TBASE.get(crop_upper, None)
 
 
+
 def validate_district_crop(district: str, crop: str) -> tuple[bool, str]:
-    """
-    Validate if a crop is grown in a specific district.
-    Returns (is_valid, error_message)
-    """
+
     district_normalized = district.strip().title()
     
     if district_normalized not in DISTRICT_CROPS:
@@ -110,22 +104,22 @@ def validate_district_crop(district: str, crop: str) -> tuple[bool, str]:
 
 
 def calculate_gdd(avg_tmax: float, avg_tmin: float, tbase: float) -> float:
-    """Calculate Growing Degree Days (GDD) = (Tmax + Tmin)/2 - Tbase"""
+
     if avg_tmax is None or avg_tmin is None or tbase is None:
         return None
     return ((avg_tmax + avg_tmin) / 2) - tbase
 
 
 class YieldInput(BaseModel):
-    district: str = Field(..., example="Surat", description="Gujarat district name")
-    crop: CropType = Field(..., example=CropType.CASTOR, description="Crop type - select from available options")
+    district: str = Field(..., example="Morbi", description="Gujarat district name")
+    crop: CropType = Field(..., example=CropType.COTTON, description="Crop type - select from available options")
     area: float = Field(..., gt=0, example=100.0, description="Area in hectares")
 
     class Config:
         json_schema_extra = {
             "example": {
-                "district": "Surat",
-                "crop": "CASTOR",
+                "district": "Morbi",
+                "crop": "COTTON",
                 "area": 100.0
             }
         }
@@ -149,63 +143,54 @@ class DistrictsResponse(BaseModel):
 
 @app.get("/", tags=["Health"])
 async def root():
-    """Health check endpoint."""
     return {"status": "healthy", "message": "Crop Yield Predictor API is running"}
 
 
 @app.get("/districts", response_model=DistrictsResponse, tags=["Districts"])
 async def list_districts():
-    """Get list of all available Gujarat districts."""
     districts = get_available_districts()
     return {"districts": districts, "total": len(districts)}
 
 
 @app.post("/predict", response_model=PredictionResponse, tags=["Prediction"])
 async def get_prediction(data: YieldInput):
-    """
-    Predict crop yield for a specific district.
-    
-    The API will automatically:
-    1. Validate if the crop is cultivated in the selected district
-    2. Fetch weather data for the selected district (last year's monsoon season)
-    3. Calculate required statistics (rainfall, temperature, humidity, etc.)
-    4. Use the trained model to predict yield
-    """
+
     if package is None:
         raise HTTPException(
             status_code=500, 
             detail="Model not loaded. Please ensure crop_yield.joblib exists."
         )
     
-    # Get crop type value
-    crop_type = data.crop.value  # Get the enum value (e.g., "CASTOR", "TOTAL RICE")
+
+    crop_type = data.crop.value 
     district_normalized = data.district.strip().title()
     
-    # 1. Validate district-crop combination
+
     is_valid, error_msg = validate_district_crop(district_normalized, crop_type)
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_msg)
     
-    # 2. Fetch weather data for the selected district (last year's monsoon: June-November)
+    
     try:
         enriched_data = await fetch_and_process_agricultural_data(data.district)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
     except Exception as e:
         raise HTTPException(
             status_code=503, 
             detail=f"Failed to fetch weather data: {str(e)}"
         )
 
-    # 3. Calculate T(base) and GDD based on crop type
+
     tbase = get_tbase(crop_type)
     
     avg_tmax = enriched_data.get("average_tmax")
     avg_tmin = enriched_data.get("average_tmin")
     gdd = calculate_gdd(avg_tmax, avg_tmin, tbase)
 
-    # 4. Create ONE-HOT ENCODED features matching the training data exactly
-    # Numeric features
+   
+
     model_input = {
         "Area": data.area,
         "mean_dry_spell_length": enriched_data.get("mean_dry_spell_length"),
@@ -218,7 +203,7 @@ async def get_prediction(data: YieldInput):
         "GDD": round(gdd, 2) if gdd is not None else None,
     }
     
-    # One-hot encode DISTRICTS (all districts from training)
+
     all_districts = [
         "Amreli", "Anand", "Aravalli", "Banaskantha", "Bharuch", "Bhavnagar",
         "Botad", "Chhota Udaipur", "Dahod", "Dang", "Devbhumi Dwarka", 
@@ -230,30 +215,31 @@ async def get_prediction(data: YieldInput):
     for d in all_districts:
         model_input[f"district_{d}"] = 1.0 if district_normalized == d else 0.0
     
-    # One-hot encode CROP TYPES (5 crops from training - CASTOR is baseline/dropped)
+    
     all_crops = ["TOTAL BAJRA", "TOTAL COTTON (LINT)", "TOTAL GROUNDNUT", "TOTAL RICE", "TOTAL TOBACCO"]
     for c in all_crops:
         model_input[f"Crop Type_{c}"] = 1.0 if crop_type == c else 0.0
     
-    # One-hot encode FIRST RAIN CATEGORY (on_time only, early is baseline/dropped)
+    
     first_rain = enriched_data.get("first_rain_category", "late")
     model_input["first_rain_category_on_time"] = 1.0 if first_rain == "on_time" else 0.0
     
-    # One-hot encode LAST RAIN CATEGORY (late and on_time, early is baseline/dropped)
+    
     last_rain = enriched_data.get("last_rain_category", "early")
     model_input["last_rain_category_late"] = 1.0 if last_rain == "late" else 0.0
     model_input["last_rain_category_on_time"] = 1.0 if last_rain == "on_time" else 0.0
     
-    # One-hot encode SEASON (2017-2023, some baseline dropped)
+    
+
     season = enriched_data.get("season", 2025)
     for year in [2017, 2018, 2019, 2020, 2021, 2022, 2023]:
         model_input[f"season_{year}"] = 1.0 if season == year else 0.0
     
-    # Define EXACT column order as used in model training
+
     FEATURE_ORDER = [
         "Area", "mean_dry_spell_length", "total_rainfall", "rainy_days",
         "average_tmax", "average_tmin", "average_humidity", "T(base)", "GDD",
-        # Districts (one-hot)
+        
         "district_Amreli", "district_Anand", "district_Aravalli", "district_Banaskantha",
         "district_Bharuch", "district_Bhavnagar", "district_Botad", "district_Chhota Udaipur",
         "district_Dahod", "district_Dang", "district_Devbhumi Dwarka", "district_Gandhinagar",
@@ -262,24 +248,22 @@ async def get_prediction(data: YieldInput):
         "district_Narmada", "district_Navsari", "district_Panchmahal", "district_Patan",
         "district_Porbandar", "district_Rajkot", "district_Sabarkantha", "district_Surat",
         "district_Surendranagar", "district_Tapi", "district_Vadodara", "district_Valsad",
-        # Crop Types (one-hot)
+        
         "Crop Type_TOTAL BAJRA", "Crop Type_TOTAL COTTON (LINT)", "Crop Type_TOTAL GROUNDNUT",
         "Crop Type_TOTAL RICE", "Crop Type_TOTAL TOBACCO",
-        # Rain categories (one-hot)
+        
         "first_rain_category_on_time", "last_rain_category_late", "last_rain_category_on_time",
-        # Seasons (one-hot)
+   
         "season_2017", "season_2018", "season_2019", "season_2020", "season_2021", 
         "season_2022", "season_2023"
     ]
 
-    # 5. Transform & Predict
+
     try:
         input_df = pd.DataFrame([model_input])
         
-        # Reorder columns to match exact training order
         input_df = input_df[FEATURE_ORDER]
         
-        # Make prediction
         prediction = package["model"].predict(input_df)[0]
         
     except Exception as e:
@@ -302,10 +286,7 @@ async def get_prediction(data: YieldInput):
 
 @app.get("/crops/{district}", tags=["Crops"])
 async def get_district_crops(district: str):
-    """
-    Get list of crops cultivated in a specific district.
-    Use this to check which crops are available before making a prediction.
-    """
+ 
     district_normalized = district.strip().title()
     
     if district_normalized not in DISTRICT_CROPS:
@@ -321,17 +302,14 @@ async def get_district_crops(district: str):
     return {
         "district": district_normalized,
         "available_crops": crop_names,
-        "crop_values": crops,  # Actual values to use in API
+        "crop_values": crops,  
         "total": len(crops)
     }
 
 
 @app.get("/weather/{district}", tags=["Weather"])
 async def get_district_weather(district: str):
-    """
-    Get last year's monsoon weather statistics for a specific district.
-    Data is fetched from June to November of the previous year.
-    """
+ 
     try:
         weather_data = await fetch_and_process_agricultural_data(district)
         return {
@@ -341,6 +319,7 @@ async def get_district_weather(district: str):
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
     except Exception as e:
         raise HTTPException(
             status_code=503, 

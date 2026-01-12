@@ -1,14 +1,9 @@
-"""
-Weather Service for Crop Yield Prediction
-Fetches weather data for a specific district and calculates required statistics
-"""
-
 import requests
 import pandas as pd
 from datetime import datetime
 from typing import Dict, Any
 
-# Gujarat Districts with their coordinates (latitude, longitude)
+
 GUJARAT_DISTRICTS = {
     "Ahmedabad": (23.0225, 72.5714),
     "Amreli": (21.6032, 71.2225),
@@ -45,22 +40,19 @@ GUJARAT_DISTRICTS = {
     "Valsad": (20.5992, 72.9342),
 }
 
-# Open-Meteo Historical Weather API endpoint
+
 BASE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
-# Date range for LAST YEAR monsoon season (June to November of previous year)
+
 CURRENT_YEAR = datetime.now().year
-LAST_YEAR = CURRENT_YEAR - 1  # Use last year's data for prediction
+LAST_YEAR = CURRENT_YEAR - 1  
 START_DATE = f"{LAST_YEAR}-06-01"
 END_DATE = f"{LAST_YEAR}-11-30"
 
 
 async def fetch_weather_data(district_name: str, lat: float, lon: float, 
                               start_date: str, end_date: str) -> pd.DataFrame:
-    """
-    Fetch historical weather data for a specific district from Open-Meteo API.
-    Returns DataFrame with: district, date, min_temp, max_temp, rain, humidity
-    """
+    
     params = {
         "latitude": lat,
         "longitude": lon,
@@ -95,19 +87,15 @@ async def fetch_weather_data(district_name: str, lat: float, lon: float,
 
 
 def calculate_district_statistics(daily_df: pd.DataFrame) -> Dict[str, Any]:
-    """
-    Calculate statistics for a single district.
-    Returns dict with all required model features.
-    """
+    
     daily_df = daily_df.copy()
     daily_df["date"] = pd.to_datetime(daily_df["date"])
     daily_df = daily_df.sort_values("date").reset_index(drop=True)
     
-    # Identify rainy days (rain > 0)
     rainy_days_df = daily_df[daily_df["rain"] > 0]
     rainy_days_count = len(rainy_days_df)
     
-    # First and last rain date
+    
     if rainy_days_count > 0:
         first_rain_date = rainy_days_df["date"].min()
         last_rain_date = rainy_days_df["date"].max()
@@ -119,10 +107,10 @@ def calculate_district_statistics(daily_df: pd.DataFrame) -> Dict[str, Any]:
         first_rain_date_str = None
         last_rain_date_str = None
     
-    # Total rainfall
+    
     total_rainfall = daily_df["rain"].sum()
     
-    # Calculate dry spell lengths (consecutive days without rain)
+    
     daily_df["is_dry"] = daily_df["rain"] <= 0
     dry_spell_lengths = []
     current_dry_spell = 0
@@ -138,15 +126,15 @@ def calculate_district_statistics(daily_df: pd.DataFrame) -> Dict[str, Any]:
     if current_dry_spell > 0:
         dry_spell_lengths.append(current_dry_spell)
     
-    # Mean dry spell length
+ 
     mean_dry_spell_length = sum(dry_spell_lengths) / len(dry_spell_lengths) if dry_spell_lengths else 0
     
-    # Average temperatures and humidity
+   
     average_tmax = daily_df["max_temp"].mean()
     average_tmin = daily_df["min_temp"].mean()
     average_humidity = daily_df["humidity"].mean()
     
-    # Rain categories
+ 
     first_rain_category = categorize_first_rain(first_rain_date)
     last_rain_category = categorize_last_rain(last_rain_date)
     
@@ -166,7 +154,6 @@ def calculate_district_statistics(daily_df: pd.DataFrame) -> Dict[str, Any]:
 
 
 def categorize_first_rain(date_obj) -> str:
-    """Categorize first rain date as early, on_time, or late."""
     if date_obj is None or pd.isna(date_obj):
         return 'No Rain'
     
@@ -181,7 +168,7 @@ def categorize_first_rain(date_obj) -> str:
 
 
 def categorize_last_rain(date_obj) -> str:
-    """Categorize last rain date as early, on_time, or late."""
+
     if date_obj is None or pd.isna(date_obj):
         return 'No Rain'
     
@@ -198,46 +185,31 @@ def categorize_last_rain(date_obj) -> str:
 async def fetch_and_process_agricultural_data(district: str, 
                                                start_date: str = None, 
                                                end_date: str = None) -> Dict[str, Any]:
-    """
-    Main function to fetch and process weather data for a specific district.
-    This is the function called by app.py for prediction.
-    
-    Args:
-        district: Name of the Gujarat district (e.g., "Surat", "Ahmedabad")
-        start_date: Start date for weather data (default: current year monsoon start)
-        end_date: End date for weather data (default: current year monsoon end)
-    
-    Returns:
-        Dict containing all calculated statistics needed for model prediction
-    """
-    # Normalize district name (title case)
+
     district_normalized = district.strip().title()
-    
-    # Check if district exists
+   
     if district_normalized not in GUJARAT_DISTRICTS:
         available_districts = ", ".join(sorted(GUJARAT_DISTRICTS.keys()))
         raise ValueError(
             f"District '{district}' not found. Available districts: {available_districts}"
         )
     
-    # Get coordinates
+
     lat, lon = GUJARAT_DISTRICTS[district_normalized]
     
-    # Use default dates if not provided
+
     if start_date is None:
         start_date = START_DATE
     if end_date is None:
         end_date = END_DATE
     
-    # Fetch weather data
+
     daily_df = await fetch_weather_data(district_normalized, lat, lon, start_date, end_date)
-    
-    # Calculate statistics
+
     stats = calculate_district_statistics(daily_df)
     
     return stats
 
 
 def get_available_districts() -> list:
-    """Return list of available districts."""
     return sorted(GUJARAT_DISTRICTS.keys())

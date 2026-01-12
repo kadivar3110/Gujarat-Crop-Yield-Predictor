@@ -8,10 +8,8 @@ st.write("""
 This is a simple web app to predict crop yield for Gujarat districts using weather data and a machine learning model. Please fill in the details below and click Predict.
 """)
 
-# API base URL (adjust if running elsewhere)
 API_URL = "http://13.60.224.58:8000"
 
-# Get districts from API
 @st.cache_data
 def get_districts():
     try:
@@ -25,14 +23,13 @@ def get_districts():
 
 districts = get_districts()
 
-# Select district
 selected_district = st.selectbox("Select District", districts)
 
-# Get crops for selected district
 @st.cache_data
 def get_crops(district):
     try:
         resp = requests.get(f"{API_URL}/crops/{district}")
+
         if resp.status_code == 200:
             return resp.json()["crop_values"]
         else:
@@ -44,20 +41,20 @@ crops = get_crops(selected_district) if selected_district else []
 selected_crop = st.selectbox("Select Crop", crops)
 
 
-# Area input
 area = st.number_input("Area (hectares)", min_value=0.1, value=1.0, step=0.1)
 
-# --- Session state for prediction result ---
 if 'prediction_result' not in st.session_state:
     st.session_state['prediction_result'] = None
+
 if 'prediction_error' not in st.session_state:
     st.session_state['prediction_error'] = None
 
 if st.button("Predict"):
-    # Clear map state when making a new prediction
+
     st.session_state['district_yields'] = None
     st.session_state['map_crop'] = None
     st.session_state['show_map'] = False
+
     if not selected_district or not selected_crop or area <= 0:
         st.session_state['prediction_result'] = None
         st.session_state['prediction_error'] = "Please fill all fields correctly."
@@ -68,6 +65,7 @@ if st.button("Predict"):
                 "crop": selected_crop,
                 "area": area
             }
+
             try:
                 resp = requests.post(f"{API_URL}/predict", json=payload)
                 if resp.status_code == 200:
@@ -81,12 +79,15 @@ if st.button("Predict"):
                 st.session_state['prediction_result'] = None
                 st.session_state['prediction_error'] = f"Request failed: {e}"
 
-# Display prediction result or error
+
+
 if st.session_state.get('prediction_result'):
     result = st.session_state['prediction_result']
+    
     st.success(f"Predicted Yield: {result['prediction']} {result['unit']}")
     st.write("Weather Data:")
     st.json(result["weather_data"])
+
 elif st.session_state.get('prediction_error'):
     st.error(st.session_state['prediction_error'])
 
