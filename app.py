@@ -60,7 +60,7 @@ DISTRICT_CROPS = {
     "Kutch": ["TOTAL BAJRA", "CASTOR", "TOTAL GROUNDNUT"],
     "Mahisagar": ["TOTAL BAJRA", "TOTAL RICE", "CASTOR"],
     "Mehsana": ["TOTAL BAJRA", "CASTOR", "TOTAL GROUNDNUT"],
-    "Morbi": ["TOTAL COTTON (LINT)", "TOTAL GROUNDNUT", "TOTAL BAJRA"],  # No TOBACCO here
+    "Morbi": ["TOTAL COTTON (LINT)", "TOTAL GROUNDNUT", "TOTAL BAJRA"]
     "Narmada": ["TOTAL RICE", "TOTAL COTTON (LINT)"],
     "Navsari": ["TOTAL RICE", "TOTAL GROUNDNUT"],
     "Panchmahal": ["TOTAL BAJRA", "TOTAL RICE"],

@@ -23,6 +23,11 @@ def get_districts():
 
 districts = get_districts()
 
+if not districts:
+    st.error("⚠️ Could not connect to the API server. Please make sure the backend API is running.")
+    st.info(f"API URL: {API_URL}")
+    st.stop()
+
 selected_district = st.selectbox("Select District", districts)
 
 @st.cache_data
