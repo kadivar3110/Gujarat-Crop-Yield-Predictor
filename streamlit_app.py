@@ -8,7 +8,7 @@ st.write("""
 This is a simple web app to predict crop yield for Gujarat districts using weather data and a machine learning model. Please fill in the details below and click Predict.
 """)
 
-API_URL = "http://13.60.224.58:8000"
+API_URL = "http://16.16.252.126:8000"
 
 @st.cache_data
 def get_districts():
